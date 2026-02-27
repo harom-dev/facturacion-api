@@ -14,18 +14,28 @@ class InvoiceController extends Controller
         private FacturaService $facturaService
     ) {}
 
-    public function index(): JsonResponse
+    private function getEmpresaId(Request $request): int
     {
+        // TODO: Cuando tengas JWT, extraerlo del token
+        // Por ahora, del request
+        return (int) $request->input('empresa_id', 1);
+    }
+
+    public function index(Request $request): JsonResponse
+    {
+        $empresaId = $this->getEmpresaId($request);
+
         return response()->json([
             'status' => 'success',
             'message' => 'Listado de facturas',
-            'data' => $this->facturaService->obtenerTodas()
+            'data' => $this->facturaService->obtenerTodas($empresaId)
         ]);
     }
 
-    public function show($id): JsonResponse
+    public function show(Request $request, $id): JsonResponse
     {
-        $factura = $this->facturaService->obtenerPorId($id);
+        $empresaId = $this->getEmpresaId($request);
+        $factura = $this->facturaService->obtenerPorId($id, $empresaId);
         
         if (!$factura) {
             return response()->json([
@@ -42,68 +52,111 @@ class InvoiceController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'serie' => 'required|string|max:10',
-            'numero' => 'required|string|max:20|unique:facturas',
-            'cliente_id' => 'required|integer',
-            'fecha' => 'required|date',
-            'items' => 'required|array',
-            'subtotal' => 'required|numeric|min:0',
-            'impuesto' => 'required|numeric|min:0',
-        ]);
+        try {
+            $empresaId = $this->getEmpresaId($request);
 
-        $dto = new CrearFacturaDTO(
-            serie: $validated['serie'],
-            numero: $validated['numero'],
-            cliente_id: $validated['cliente_id'],
-            fecha: $validated['fecha'],
-            items: $validated['items'],
-            subtotal: (float) $validated['subtotal'],
-            impuesto: (float) $validated['impuesto'],
-        );
+            $validated = $request->validate([
+                'client.name' => 'required|string|max:255',
+                'client.document' => 'required|string|max:20',
+                'items' => 'required|array|min:1',
+                'items.*.description' => 'required|string|max:255',
+                'items.*.quantity' => 'required|integer|min:1',
+                'items.*.price' => 'required|numeric|min:0',
+            ]);
 
-        $factura = $this->facturaService->crear($dto);
+            $items = array_map(function ($item) {
+                return [
+                    'descripcion' => $item['description'],
+                    'cantidad' => $item['quantity'],
+                    'precio_unitario' => $item['price'],
+                ];
+            }, $validated['items']);
 
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Factura creada',
-            'data' => $factura
-        ], 201);
+            $dto = new CrearFacturaDTO(
+                serie: 'F001',
+                cliente_id: 1, // TODO: obtener del cliente autenticado
+                items: $items,
+                fecha: date('Y-m-d'),
+                empresa_id: $empresaId
+            );
+
+            $factura = $this->facturaService->crear($dto);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Factura creada correctamente',
+                'data' => $factura
+            ], 201);
+
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage()
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 
     public function update(Request $request, $id): JsonResponse
     {
-        $factura = $this->facturaService->actualizar($id, $request->all());
+        try {
+            $empresaId = $this->getEmpresaId($request);
 
-        if (!$factura) {
+            $validated = $request->validate([
+                'estado' => 'required|in:pendiente,pagada,anulada',
+            ]);
+
+            $factura = $this->facturaService->actualizar($id, $empresaId, $validated);
+
+            if (!$factura) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Factura no encontrada'
+                ], 404);
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Factura actualizada',
+                'data' => $factura
+            ]);
+
+        } catch (\Exception $e) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Factura no encontrada'
-            ], 404);
+                'message' => $e->getMessage()
+            ], 422);
         }
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Factura actualizada',
-            'data' => $factura
-        ]);
     }
 
-    public function destroy($id): JsonResponse
+    public function destroy(Request $request, $id): JsonResponse
     {
-        $factura = $this->facturaService->anular($id);
+        try {
+            $empresaId = $this->getEmpresaId($request);
+            $factura = $this->facturaService->anular($id, $empresaId);
 
-        if (!$factura) {
+            if (!$factura) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Factura no encontrada o ya anulada'
+                ], 404);
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Factura anulada',
+                'data' => $factura
+            ]);
+
+        } catch (\Exception $e) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Factura no encontrada o ya anulada'
-            ], 404);
+                'message' => $e->getMessage()
+            ], 422);
         }
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Factura anulada',
-            'data' => $factura
-        ]);
     }
 }

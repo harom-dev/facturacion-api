@@ -6,6 +6,7 @@ class Factura
 {
     public function __construct(
         public int $id,
+        public int $empresa_id,
         public string $serie,
         public string $numero,
         public string $fecha,
@@ -21,6 +22,7 @@ class Factura
     {
         return [
             'id' => $this->id,
+            'empresa_id' => $this->empresa_id,
             'serie' => $this->serie,
             'numero' => $this->numero,
             'fecha' => $this->fecha,

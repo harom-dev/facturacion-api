@@ -2,95 +2,115 @@
 
 namespace App\Repositories;
 
-use App\Domain\Factura;
+use App\Domain\Factura as FacturaDomain;
+use App\Models\Factura as FacturaModel;
+use App\Models\ItemFactura;
 
 interface FacturaRepositoryInterface
 {
-    public function obtenerTodas(): array;
-    public function obtenerPorId(int $id): ?Factura;
-    public function crear(Factura $factura): Factura;
-    public function actualizar(int $id, Factura $factura): ?Factura;
+    public function obtenerTodas(int $empresaId): array;
+    public function obtenerPorId(int $id, int $empresaId): ?FacturaDomain;
+    public function crear(FacturaDomain $factura): FacturaDomain;
+    public function actualizar(int $id, FacturaDomain $factura): ?FacturaDomain;
     public function eliminar(int $id): bool;
 }
 
 class FacturaRepository implements FacturaRepositoryInterface
 {
-    private array $facturas = [];
-    private int $nextId = 1;
-
-    public function __construct()
+    public function obtenerTodas(int $empresaId): array
     {
-        $this->inicializarDatosDemo();
+        $facturas = FacturaModel::where('empresa_id', $empresaId)
+            ->with(['cliente', 'items'])
+            ->get();
+
+        return $facturas->map(fn($f) => $this->modeloToDomain($f))->toArray();
     }
 
-    private function inicializarDatosDemo(): void
+    public function obtenerPorId(int $id, int $empresaId): ?FacturaDomain
     {
-        $this->facturas = [
-            new Factura(
-                1,
-                'F001',
-                '000123',
-                '2025-02-27',
-                ['nombre' => 'Juan Pérez', 'documento' => '12345678'],
-                [
-                    ['producto' => 'Laptop', 'cantidad' => 1, 'precio' => 1000.00]
-                ],
-                1000.00,
-                180.00,
-                1180.00,
-                'pagada'
-            ),
-            new Factura(
-                2,
-                'F001',
-                '000124',
-                '2025-02-26',
-                ['nombre' => 'María García', 'documento' => '87654321'],
-                [
-                    ['producto' => 'Mouse', 'cantidad' => 2, 'precio' => 25.00]
-                ],
-                50.00,
-                9.00,
-                59.00,
-                'pendiente'
-            ),
-        ];
-        $this->nextId = 3;
+        $factura = FacturaModel::where('id', $id)
+            ->where('empresa_id', $empresaId)
+            ->with(['cliente', 'items'])
+            ->first();
+
+        return $factura ? $this->modeloToDomain($factura) : null;
     }
 
-    public function obtenerTodas(): array
+    public function crear(FacturaDomain $factura): FacturaDomain
     {
-        return array_values($this->facturas);
+        $modelo = FacturaModel::create([
+            'empresa_id' => $factura->empresa_id,
+            'cliente_id' => $factura->cliente['id'],
+            'serie' => $factura->serie,
+            'numero' => $factura->numero,
+            'fecha' => $factura->fecha,
+            'subtotal' => $factura->subtotal,
+            'impuesto' => $factura->impuesto,
+            'total' => $factura->total,
+            'estado' => $factura->estado,
+        ]);
+
+        // Crear items
+        foreach ($factura->items as $item) {
+            ItemFactura::create([
+                'factura_id' => $modelo->id,
+                'descripcion' => $item['descripcion'],
+                'cantidad' => $item['cantidad'],
+                'precio_unitario' => $item['precio_unitario'],
+                'subtotal' => $item['cantidad'] * $item['precio_unitario'],
+            ]);
+        }
+
+        $modelo->load(['cliente', 'items']);
+        return $this->modeloToDomain($modelo);
     }
 
-    public function obtenerPorId(int $id): ?Factura
+    public function actualizar(int $id, FacturaDomain $factura): ?FacturaDomain
     {
-        return $this->facturas[$id] ?? null;
-    }
+        $modelo = FacturaModel::find($id);
 
-    public function crear(Factura $factura): Factura
-    {
-        $factura->id = $this->nextId++;
-        $this->facturas[$factura->id] = $factura;
-        return $factura;
-    }
-
-    public function actualizar(int $id, Factura $factura): ?Factura
-    {
-        if (!isset($this->facturas[$id])) {
+        if (!$modelo) {
             return null;
         }
-        $factura->id = $id;
-        $this->facturas[$id] = $factura;
-        return $factura;
+
+        $modelo->update([
+            'estado' => $factura->estado,
+        ]);
+
+        $modelo->load(['cliente', 'items']);
+        return $this->modeloToDomain($modelo);
     }
 
     public function eliminar(int $id): bool
     {
-        if (!isset($this->facturas[$id])) {
-            return false;
-        }
-        unset($this->facturas[$id]);
-        return true;
+        return FacturaModel::destroy($id) > 0;
+    }
+
+    /**
+     * Convertir Modelo Eloquent a Domain
+     */
+    private function modeloToDomain(FacturaModel $modelo): FacturaDomain
+    {
+        return new FacturaDomain(
+            id: $modelo->id,
+            empresa_id: $modelo->empresa_id,
+            serie: $modelo->serie,
+            numero: $modelo->numero,
+            fecha: $modelo->fecha->format('Y-m-d'),
+            cliente: [
+                'id' => $modelo->cliente_id,
+                'nombre' => $modelo->cliente->nombre,
+                'documento' => $modelo->cliente->documento,
+            ],
+            items: $modelo->items->map(fn($item) => [
+                'descripcion' => $item->descripcion,
+                'cantidad' => $item->cantidad,
+                'precio_unitario' => $item->precio_unitario,
+            ])->toArray(),
+            subtotal: (float) $modelo->subtotal,
+            impuesto: (float) $modelo->impuesto,
+            total: (float) $modelo->total,
+            estado: $modelo->estado,
+        );
     }
 }
