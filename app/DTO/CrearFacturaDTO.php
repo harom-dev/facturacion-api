@@ -5,50 +5,60 @@ namespace App\DTO;
 class CrearFacturaDTO
 {
     private string $serie;
-    private int $cliente_id;
+    private string $tipo;
+    private string $cliente_nombre;
+    private string $cliente_documento;
+    private ?string $cliente_email;
     private array $items;
     private string $fecha;
     private int $empresa_id;
 
     public function __construct(
         string $serie,
-        int $cliente_id,
+        string $tipo,
+        string $cliente_nombre,
+        string $cliente_documento,
         array $items,
         string $fecha,
-        int $empresa_id = 1
+        int $empresa_id,
+        ?string $cliente_email = null,
     ) {
-        $this->validar($serie, $cliente_id, $items, $fecha);
-        
+        $this->validar($serie, $tipo, $cliente_nombre, $cliente_documento, $items, $fecha);
+
         $this->serie = $serie;
-        $this->cliente_id = $cliente_id;
+        $this->tipo = $tipo;
+        $this->cliente_nombre = trim($cliente_nombre);
+        $this->cliente_documento = trim($cliente_documento);
+        $this->cliente_email = $cliente_email;
         $this->items = $this->normalizarItems($items);
         $this->fecha = $fecha;
         $this->empresa_id = $empresa_id;
     }
 
-    /**
-     * Validaciones críticas para producción
-     */
-    private function validar(string $serie, int $cliente_id, array $items, string $fecha): void
+    private function validar(string $serie, string $tipo, string $cliente_nombre, string $cliente_documento, array $items, string $fecha): void
     {
-        // Validar serie
         if (empty($serie) || strlen($serie) > 10) {
-            throw new \InvalidArgumentException('Serie inválida');
+            throw new \InvalidArgumentException('Serie inválida (máximo 10 caracteres)');
         }
 
-        // Validar cliente_id
-        if ($cliente_id <= 0) {
-            throw new \InvalidArgumentException('cliente_id debe ser mayor a 0');
+        if (!in_array($tipo, ['factura', 'boleta'])) {
+            throw new \InvalidArgumentException('Tipo inválido. Use: factura o boleta');
         }
 
-        // Validar items
+        if (empty(trim($cliente_nombre))) {
+            throw new \InvalidArgumentException('El nombre del cliente es requerido');
+        }
+
+        if (empty(trim($cliente_documento))) {
+            throw new \InvalidArgumentException('El documento del cliente es requerido');
+        }
+
         if (empty($items)) {
             throw new \InvalidArgumentException('La factura debe tener al menos 1 item');
         }
 
-        // Validar cada item
         foreach ($items as $key => $item) {
-            if (!isset($item['descripcion']) || empty($item['descripcion'])) {
+            if (!isset($item['descripcion']) || empty(trim($item['descripcion']))) {
                 throw new \InvalidArgumentException("Item {$key}: descripción requerida");
             }
 
@@ -61,19 +71,15 @@ class CrearFacturaDTO
             }
         }
 
-        // Validar fecha
         if (!$this->esFormatoFechaValido($fecha)) {
             throw new \InvalidArgumentException('Fecha inválida (formato: Y-m-d)');
         }
 
         if (strtotime($fecha) > time()) {
-            throw new \InvalidArgumentException('Fecha no puede ser futura');
+            throw new \InvalidArgumentException('La fecha no puede ser futura');
         }
     }
 
-    /**
-     * Normalizar items: asegurar que están bien formados
-     */
     private function normalizarItems(array $items): array
     {
         return array_map(function ($item) {
@@ -91,39 +97,19 @@ class CrearFacturaDTO
         return $d && $d->format('Y-m-d') === $fecha;
     }
 
-    // Getters
-    public function getSerie(): string
-    {
-        return $this->serie;
-    }
+    public function getSerie(): string { return $this->serie; }
+    public function getTipo(): string { return $this->tipo; }
+    public function getClienteNombre(): string { return $this->cliente_nombre; }
+    public function getClienteDocumento(): string { return $this->cliente_documento; }
+    public function getClienteEmail(): ?string { return $this->cliente_email; }
+    public function getItems(): array { return $this->items; }
+    public function getFecha(): string { return $this->fecha; }
+    public function getEmpresaId(): int { return $this->empresa_id; }
 
-    public function getClienteId(): int
-    {
-        return $this->cliente_id;
-    }
-
-    public function getItems(): array
-    {
-        return $this->items;
-    }
-
-    public function getFecha(): string
-    {
-        return $this->fecha;
-    }
-
-    public function getEmpresaId(): int
-    {
-        return $this->empresa_id;
-    }
-
-    /**
-     * Método para el Service: calcula el subtotal BASE (sin IGV)
-     */
     public function calcularSubtotalBase(): float
     {
         return array_reduce($this->items, function ($total, $item) {
             return $total + ($item['cantidad'] * $item['precio_unitario']);
-        }, 0);
+        }, 0.0);
     }
 }

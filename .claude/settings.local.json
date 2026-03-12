@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//h/Proyectos de Programacion/Local/SIS-POST-TENT/backend/**)",
+      "Bash(php artisan tinker --execute=\":*)"
+    ]
+  }
+}

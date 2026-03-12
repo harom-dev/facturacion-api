@@ -8,13 +8,30 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Factura extends Model
 {
-    protected $fillable = ['empresa_id', 'cliente_id', 'serie', 'numero', 'fecha', 'subtotal', 'impuesto', 'total', 'estado'];
+    protected $fillable = [
+        'empresa_id', 
+        'cliente_nombre', 
+        'cliente_documento', 
+        'cliente_email',
+        'serie', 
+        'numero', 
+        'fecha', 
+        'subtotal', 
+        'impuesto', 
+        'total', 
+        'tipo',
+        'estado',
+        'estado_sunat',
+        'respuesta_sunat',
+        'certificado_usado'
+    ];
 
     protected $casts = [
         'fecha' => 'date',
         'subtotal' => 'float',
         'impuesto' => 'float',
         'total' => 'float',
+        'respuesta_sunat' => 'array',
     ];
 
     public function empresa(): BelongsTo
@@ -22,13 +39,8 @@ class Factura extends Model
         return $this->belongsTo(Empresa::class);
     }
 
-    public function cliente(): BelongsTo
-    {
-        return $this->belongsTo(Cliente::class);
-    }
-
     public function items(): HasMany
     {
-        return $this->hasMany(ItemFactura::class, 'factura_id');
+        return $this->hasMany(ItemFactura::class);
     }
 }

@@ -14,7 +14,9 @@ return new class extends Migration
         Schema::create('facturas', function (Blueprint $table) {
             $table->id();
             $table->foreignId('empresa_id')->constrained('empresas')->onDelete('cascade');
-            $table->foreignId('cliente_id')->constrained('clientes')->onDelete('cascade');
+            $table->string('cliente_nombre');
+            $table->string('cliente_documento');
+            $table->string('cliente_email')->nullable();
             $table->string('serie')->default('F001');
             $table->string('numero')->unique();
             $table->date('fecha');
@@ -22,6 +24,10 @@ return new class extends Migration
             $table->decimal('impuesto', 12, 2);
             $table->decimal('total', 12, 2);
             $table->enum('estado', ['pendiente', 'pagada', 'anulada'])->default('pendiente');
+            $table->string('tipo')->default('factura'); // factura o boleta
+            $table->string('estado_sunat')->default('pendiente'); // pendiente, enviado, aceptado, rechazado
+            $table->json('respuesta_sunat')->nullable();
+            $table->string('certificado_usado')->nullable();
             $table->timestamps();
         });
     }

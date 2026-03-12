@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Domain\Factura;
 use App\DTO\CrearFacturaDTO;
+use App\Models\Factura as FacturaModel;
 use App\Repositories\FacturaRepositoryInterface;
 
 class FacturaService
@@ -29,22 +30,26 @@ class FacturaService
     public function crear(CrearFacturaDTO $dto): array
     {
         $subtotal = $dto->calcularSubtotalBase();
-        $igv = round($subtotal * self::IGV_RATE, 2);
-        $total = $subtotal + $igv;
-        $numero = $this->generarNumeroFactura($dto->getSerie(), $dto->getEmpresaId());
+        $igv      = round($subtotal * self::IGV_RATE, 2);
+        $total    = round($subtotal + $igv, 2);
+        $numero   = $this->generarNumeroFactura($dto->getSerie(), $dto->getEmpresaId());
 
         $factura = new Factura(
-            id: 0,
-            empresa_id: $dto->getEmpresaId(),
-            serie: $dto->getSerie(),
-            numero: $numero,
-            fecha: $dto->getFecha(),
-            cliente: ['id' => $dto->getClienteId()],
-            items: $dto->getItems(),
-            subtotal: $subtotal,
-            impuesto: $igv,
-            total: $total,
-            estado: 'pendiente'
+            id:                0,
+            empresa_id:        $dto->getEmpresaId(),
+            serie:             $dto->getSerie(),
+            numero:            $numero,
+            tipo:              $dto->getTipo(),
+            fecha:             $dto->getFecha(),
+            cliente_nombre:    $dto->getClienteNombre(),
+            cliente_documento: $dto->getClienteDocumento(),
+            cliente_email:     $dto->getClienteEmail(),
+            items:             $dto->getItems(),
+            subtotal:          $subtotal,
+            impuesto:          $igv,
+            total:             $total,
+            estado:            'pendiente',
+            estado_sunat:      'pendiente',
         );
 
         $factura = $this->repository->crear($factura);
@@ -54,7 +59,7 @@ class FacturaService
     public function actualizar(int $id, int $empresaId, array $datos): ?array
     {
         $factura = $this->repository->obtenerPorId($id, $empresaId);
-        
+
         if (!$factura) {
             return null;
         }
@@ -70,7 +75,7 @@ class FacturaService
     public function anular(int $id, int $empresaId): ?array
     {
         $factura = $this->repository->obtenerPorId($id, $empresaId);
-        
+
         if (!$factura || !$factura->esAnulable()) {
             return null;
         }
@@ -82,8 +87,12 @@ class FacturaService
 
     private function generarNumeroFactura(string $serie, int $empresaId): string
     {
-        $todas = $this->repository->obtenerTodas($empresaId);
-        $numero = count($todas) + 1;
-        return str_pad($numero, 6, '0', STR_PAD_LEFT);
+        $ultimo = FacturaModel::where('empresa_id', $empresaId)
+            ->where('serie', $serie)
+            ->max('numero');
+
+        $siguiente = $ultimo ? ((int) $ultimo) + 1 : 1;
+
+        return str_pad($siguiente, 8, '0', STR_PAD_LEFT);
     }
 }

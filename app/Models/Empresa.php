@@ -7,15 +7,32 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Empresa extends Model
 {
-    protected $fillable = ['nombre', 'ruc', 'direccion', 'telefono', 'email', 'activa'];
+    protected $fillable = [
+        'nombre',
+        'ruc',
+        'direccion',
+        'telefono',
+        'email',
+        'certificado_pfx',
+        'certificado_password',
+        'activa',
+    ];
 
-    public function clientes(): HasMany
-    {
-        return $this->hasMany(Cliente::class);
-    }
+    // El certificado nunca se expone en responses JSON
+    protected $hidden = ['certificado_pfx', 'certificado_password'];
 
     public function facturas(): HasMany
     {
         return $this->hasMany(Factura::class);
+    }
+
+    public function apiTokens(): HasMany
+    {
+        return $this->hasMany(ApiToken::class);
+    }
+
+    public function tieneCertificado(): bool
+    {
+        return !empty($this->certificado_pfx);
     }
 }

@@ -20,7 +20,7 @@ class FacturaRepository implements FacturaRepositoryInterface
     public function obtenerTodas(int $empresaId): array
     {
         $facturas = FacturaModel::where('empresa_id', $empresaId)
-            ->with(['cliente', 'items'])
+            ->with('items')
             ->get();
 
         return $facturas->map(fn($f) => $this->modeloToDomain($f))->toArray();
@@ -30,7 +30,7 @@ class FacturaRepository implements FacturaRepositoryInterface
     {
         $factura = FacturaModel::where('id', $id)
             ->where('empresa_id', $empresaId)
-            ->with(['cliente', 'items'])
+            ->with('items')
             ->first();
 
         return $factura ? $this->modeloToDomain($factura) : null;
@@ -39,29 +39,32 @@ class FacturaRepository implements FacturaRepositoryInterface
     public function crear(FacturaDomain $factura): FacturaDomain
     {
         $modelo = FacturaModel::create([
-            'empresa_id' => $factura->empresa_id,
-            'cliente_id' => $factura->cliente['id'],
-            'serie' => $factura->serie,
-            'numero' => $factura->numero,
-            'fecha' => $factura->fecha,
-            'subtotal' => $factura->subtotal,
-            'impuesto' => $factura->impuesto,
-            'total' => $factura->total,
-            'estado' => $factura->estado,
+            'empresa_id'        => $factura->empresa_id,
+            'tipo'              => $factura->tipo,
+            'serie'             => $factura->serie,
+            'numero'            => $factura->numero,
+            'fecha'             => $factura->fecha,
+            'cliente_nombre'    => $factura->cliente_nombre,
+            'cliente_documento' => $factura->cliente_documento,
+            'cliente_email'     => $factura->cliente_email,
+            'subtotal'          => $factura->subtotal,
+            'impuesto'          => $factura->impuesto,
+            'total'             => $factura->total,
+            'estado'            => $factura->estado,
+            'estado_sunat'      => $factura->estado_sunat,
         ]);
 
-        // Crear items
         foreach ($factura->items as $item) {
             ItemFactura::create([
-                'factura_id' => $modelo->id,
-                'descripcion' => $item['descripcion'],
-                'cantidad' => $item['cantidad'],
+                'factura_id'      => $modelo->id,
+                'descripcion'     => $item['descripcion'],
+                'cantidad'        => $item['cantidad'],
                 'precio_unitario' => $item['precio_unitario'],
-                'subtotal' => $item['cantidad'] * $item['precio_unitario'],
+                'subtotal'        => $item['cantidad'] * $item['precio_unitario'],
             ]);
         }
 
-        $modelo->load(['cliente', 'items']);
+        $modelo->load('items');
         return $this->modeloToDomain($modelo);
     }
 
@@ -77,7 +80,7 @@ class FacturaRepository implements FacturaRepositoryInterface
             'estado' => $factura->estado,
         ]);
 
-        $modelo->load(['cliente', 'items']);
+        $modelo->load('items');
         return $this->modeloToDomain($modelo);
     }
 
@@ -86,31 +89,29 @@ class FacturaRepository implements FacturaRepositoryInterface
         return FacturaModel::destroy($id) > 0;
     }
 
-    /**
-     * Convertir Modelo Eloquent a Domain
-     */
     private function modeloToDomain(FacturaModel $modelo): FacturaDomain
     {
         return new FacturaDomain(
-            id: $modelo->id,
-            empresa_id: $modelo->empresa_id,
-            serie: $modelo->serie,
-            numero: $modelo->numero,
-            fecha: $modelo->fecha->format('Y-m-d'),
-            cliente: [
-                'id' => $modelo->cliente_id,
-                'nombre' => $modelo->cliente->nombre,
-                'documento' => $modelo->cliente->documento,
-            ],
-            items: $modelo->items->map(fn($item) => [
-                'descripcion' => $item->descripcion,
-                'cantidad' => $item->cantidad,
+            id:                 $modelo->id,
+            empresa_id:         $modelo->empresa_id,
+            serie:              $modelo->serie,
+            numero:             $modelo->numero,
+            tipo:               $modelo->tipo,
+            fecha:              $modelo->fecha->format('Y-m-d'),
+            cliente_nombre:     $modelo->cliente_nombre,
+            cliente_documento:  $modelo->cliente_documento,
+            cliente_email:      $modelo->cliente_email,
+            items:              $modelo->items->map(fn($item) => [
+                'descripcion'     => $item->descripcion,
+                'cantidad'        => $item->cantidad,
                 'precio_unitario' => $item->precio_unitario,
+                'subtotal'        => $item->subtotal,
             ])->toArray(),
-            subtotal: (float) $modelo->subtotal,
-            impuesto: (float) $modelo->impuesto,
-            total: (float) $modelo->total,
-            estado: $modelo->estado,
+            subtotal:           (float) $modelo->subtotal,
+            impuesto:           (float) $modelo->impuesto,
+            total:              (float) $modelo->total,
+            estado:             $modelo->estado,
+            estado_sunat:       $modelo->estado_sunat,
         );
     }
 }
